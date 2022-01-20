@@ -142,24 +142,24 @@ class Game():
     def run(self):
         rock = Wall((100, 200), 'rock')
         self.all_sprites.add(rock)
-        player = Player((1000, 400))
-        self.player_sprite = pygame.sprite.Group()
-        self.player_sprite.add(player)
-        for phrase in player.phrases:
+        self.player = Player((1000, 400))
+        self.all_sprites.add(self.player)
+        for phrase in self.player.phrases:
             phrase.add_groups()
+        self.player.ray.add_groups()
         self.walls_sprites.add(rock)
         camera = Camera()
         while self.running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     go_menu()
-            camera.update(player, self.fon)
+            camera.update(self.player, self.fon)
             for sprite in self.all_sprites:
                 camera.apply(sprite)
+
+            self.player.update(self.walls_sprites)
             self.all_sprites.update()
             self.all_sprites.draw(self.screen)
-            self.player_sprite.update(self.walls_sprites)
-            self.player_sprite.draw(self.screen)
             pygame.display.flip()
             self.screen.fill(pygame.Color(0, 0, 0))
             self.clock.tick(FPS)
@@ -189,7 +189,8 @@ class Player(pygame.sprite.Sprite):
         self.v = 4
         self.n_animation = 0
         self.n_animation_limit = 10
-        self.phrases = [Messege('Соблюдай дистанцию', self, 30)]
+        self.phrases = [Messege('ДА БЛЯТЬ ЛОБ БОЛИТ', self, 30)]
+        self.ray = Ray(self, 500)
 
     def check_colide(self, walls, type_move):
         stack_sprite = pygame.sprite.Sprite()
@@ -207,52 +208,59 @@ class Player(pygame.sprite.Sprite):
                 return False
         return True
 
-    def update(self, walls):
-        keys = pygame.key.get_pressed()
-        if any([keys[pygame.K_d], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_w]]):
-            animate_flag = False
-            if keys[pygame.K_d]:
-                if self.check_colide(walls, 'right'):
-                    animate_flag = True
-                    if self.rect.x + self.rect.w + self.v <= WIDTH:
-                        self.rect.x += self.v
-                    else:
-                        animate_flag = False
-                        self.rect.x = WIDTH - self.rect.w
-            if keys[pygame.K_a]:
-                if self.check_colide(walls, 'left'):
-                    animate_flag = True
-                    if self.rect.x - self.v >= 0:
-                        self.rect.x -= self.v
-                    else:
-                        animate_flag = False
-                        self.rect.x = 0
-            if keys[pygame.K_w]:
-                if self.check_colide(walls, 'up'):
-                    animate_flag = True
-                    if self.rect.y - self.v >= 0:
-                        self.rect.y -= self.v
-                    else:
-                        animate_flag = False
-                        self.rect.y = 0
-            if keys[pygame.K_s]:
-                if self.check_colide(walls, 'down'):
-                    animate_flag = True
-                    if self.rect.y + self.rect.h + self.v <= HEIGHT:
-                        self.rect.y += self.v
-                    else:
-                        animate_flag = False
-                        self.rect.y = HEIGHT - self.rect.h
-            if animate_flag:
-                self.change_image()
+    def update(self, *args):
+        if args:
+            walls = args[0]
+            keys = pygame.key.get_pressed()
+            self.phrases[0].show = False
+            if pygame.mouse.get_pressed()[0]:
+                self.ray.update(True)
+            else:
+                self.ray.update(False)
+            if any([keys[pygame.K_d], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_w]]):
+                animate_flag = False
+                if keys[pygame.K_d]:
+                    if self.check_colide(walls, 'right'):
+                        animate_flag = True
+                        if self.rect.x + self.rect.w + self.v <= WIDTH:
+                            self.rect.x += self.v
+                        else:
+                            animate_flag = False
+                            self.rect.x = WIDTH - self.rect.w
+                if keys[pygame.K_a]:
+                    if self.check_colide(walls, 'left'):
+                        animate_flag = True
+                        if self.rect.x - self.v >= 0:
+                            self.rect.x -= self.v
+                        else:
+                            animate_flag = False
+                            self.rect.x = 0
+                if keys[pygame.K_w]:
+                    if self.check_colide(walls, 'up'):
+                        animate_flag = True
+                        if self.rect.y - self.v >= 0:
+                            self.rect.y -= self.v
+                        else:
+                            animate_flag = False
+                            self.rect.y = 0
+                if keys[pygame.K_s]:
+                    if self.check_colide(walls, 'down'):
+                        animate_flag = True
+                        if self.rect.y + self.rect.h + self.v <= HEIGHT:
+                            self.rect.y += self.v
+                        else:
+                            animate_flag = False
+                            self.rect.y = HEIGHT - self.rect.h
+                if animate_flag:
+                    self.change_image()
+                else:
+                    self.image = self.image_1
+                    self.phrases[0].show = True
+
+                if SOUNDS[0].get_num_channels() == 0:
+                    SOUNDS[0].play()
             else:
                 self.image = self.image_1
-
-
-            if SOUNDS[0].get_num_channels() == 0:
-                SOUNDS[0].play()
-        else:
-            self.image = self.image_1
 
     def change_image(self):
         if self.n_animation == self.n_animation_limit:
@@ -289,8 +297,8 @@ class Messege(pygame.sprite.Sprite):
     def __init__(self, text, player, font_size):
         super().__init__()
         self.rect = pygame.Surface((0, 0)).get_rect()
-        self.rect.w = len(text) * (font_size + 10)
-        self.rect.h = font_size + 10
+        self.rect.w = len(text) * font_size // 2
+        self.rect.h = font_size
         self.rect.x = player.rect.x + 0.75 * player.rect.w
         self.rect.y = player.rect.y + self.rect.h + 5
         image = pygame.Surface((self.rect.w, self.rect.h))
@@ -302,14 +310,65 @@ class Messege(pygame.sprite.Sprite):
         f = pygame.font.Font(None, self.font_size)
         self.name = text
         self.text = f.render(self.name, True, (0, 0, 0))
-        self.up_top = (self.rect.h - self.font_size) // 2
+        self.up_top = (self.rect.h - self.text.get_rect()[3]) // 2
         self.left_top = (self.rect.w - self.text.get_rect()[2]) // 2
         self.image.blit(self.text, (self.left_top, self.up_top))
         self.player = player
+        self.show = False
 
     def update(self):
-        self.rect.x = self.player.rect.x + 0.75 * self.player.rect.w
-        self.rect.y = self.player.rect.y + self.rect.h + 5
+        if self.show:
+            self.rect.x = self.player.rect.x + 0.75 * self.player.rect.w
+            self.rect.y = self.player.rect.y - self.rect.h - 5
+        else:
+            self.rect.x = -1000
+            self.rect.y = -1000
+
+    def add_groups(self):
+        for group in self.player.groups():
+            group.add(self)
+
+
+class Ray(pygame.sprite.Sprite):
+    def __init__(self, player, distance):
+        super().__init__()
+        self.rect = pygame.Surface((0, 0)).get_rect()
+        self.distance = distance
+        self.player = player
+        self.image = pygame.Surface((0, 0))
+
+    def update(self, *args):
+        if args:
+            pressed = args[0]
+            if pressed:
+                player_pos = (self.player.rect.centerx, self.player.rect.centery)
+                pos = pygame.mouse.get_pos()
+                d1 = ((pos[0] - player_pos[0]) ** 2 + (pos[1] - player_pos[1]) ** 2) ** 0.5
+                k = d1 / self.distance
+                x = (pos[0] - player_pos[0]) / k + player_pos[0]
+                y = (pos[1] - player_pos[1]) / k + player_pos[1]
+                w = x - player_pos[0]
+                h = y - player_pos[1]
+                self.image = pygame.Surface((abs(w), abs(h)), pygame.SRCALPHA)
+                if w >= 0 and h >= 0:
+                    pygame.draw.line(self.image, (0, 0, 255, 120), (0, 0), (abs(w), abs(h)), 20)
+                elif w < 0 and h < 0:
+                    pygame.draw.line(self.image, (0, 0, 255, 120), (abs(w), abs(h)), (0, 0), 20)
+                elif w >= 0 and h < 0:
+                    pygame.draw.line(self.image, (0, 0, 255, 120), (0, abs(h)), (abs(w), 0), 20)
+                else:
+                    pygame.draw.line(self.image, (0, 0, 255, 120), (abs(w), 0), (0, abs(h)), 20)
+                if w < 0:
+                    self.rect.x = x
+                else:
+                    self.rect.x = player_pos[0]
+                if h < 0:
+                    self.rect.y = y
+                else:
+                    self.rect.y = player_pos[1]
+            else:
+                self.rect.x = -1000
+                self.rect.y = -1000
 
     def add_groups(self):
         for group in self.player.groups():
