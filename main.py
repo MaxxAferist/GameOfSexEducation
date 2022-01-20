@@ -172,6 +172,7 @@ class Wall(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
+        self.mask = pygame.mask.from_surface(self.image)
 
 
 class Player(pygame.sprite.Sprite):
@@ -191,8 +192,9 @@ class Player(pygame.sprite.Sprite):
         self.n_animation_limit = 10
         self.phrases = [Messege('ДА БЛЯТЬ ЛОБ БОЛИТ', self, 30)]
         self.ray = Ray(self, 500)
+        self.mask = pygame.mask.from_surface(self.image)
 
-    def check_colide(self, walls, type_move):
+    def check_colide_move(self, walls, type_move):
         stack_sprite = pygame.sprite.Sprite()
         stack_sprite.rect = self.rect.copy()
         if type_move == 'right':
@@ -215,12 +217,15 @@ class Player(pygame.sprite.Sprite):
             self.phrases[0].show = False
             if pygame.mouse.get_pressed()[0]:
                 self.ray.update(True)
+                for wall in walls:
+                    if pygame.sprite.collide_rect(self.ray, wall):
+                        print('You lox')
             else:
                 self.ray.update(False)
             if any([keys[pygame.K_d], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_w]]):
                 animate_flag = False
                 if keys[pygame.K_d]:
-                    if self.check_colide(walls, 'right'):
+                    if self.check_colide_move(walls, 'right'):
                         animate_flag = True
                         if self.rect.x + self.rect.w + self.v <= WIDTH:
                             self.rect.x += self.v
@@ -228,7 +233,7 @@ class Player(pygame.sprite.Sprite):
                             animate_flag = False
                             self.rect.x = WIDTH - self.rect.w
                 if keys[pygame.K_a]:
-                    if self.check_colide(walls, 'left'):
+                    if self.check_colide_move(walls, 'left'):
                         animate_flag = True
                         if self.rect.x - self.v >= 0:
                             self.rect.x -= self.v
@@ -236,7 +241,7 @@ class Player(pygame.sprite.Sprite):
                             animate_flag = False
                             self.rect.x = 0
                 if keys[pygame.K_w]:
-                    if self.check_colide(walls, 'up'):
+                    if self.check_colide_move(walls, 'up'):
                         animate_flag = True
                         if self.rect.y - self.v >= 0:
                             self.rect.y -= self.v
@@ -244,7 +249,7 @@ class Player(pygame.sprite.Sprite):
                             animate_flag = False
                             self.rect.y = 0
                 if keys[pygame.K_s]:
-                    if self.check_colide(walls, 'down'):
+                    if self.check_colide_move(walls, 'down'):
                         animate_flag = True
                         if self.rect.y + self.rect.h + self.v <= HEIGHT:
                             self.rect.y += self.v
@@ -273,6 +278,7 @@ class Player(pygame.sprite.Sprite):
             self.n_animation = 0
         else:
             self.n_animation += 1
+        self.mask = pygame.mask.from_surface(self.image)
 
 
 class Camera():
@@ -336,6 +342,7 @@ class Ray(pygame.sprite.Sprite):
         self.distance = distance
         self.player = player
         self.image = pygame.Surface((0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
 
     def update(self, *args):
         if args:
@@ -366,6 +373,7 @@ class Ray(pygame.sprite.Sprite):
                     self.rect.y = y
                 else:
                     self.rect.y = player_pos[1]
+                self.mask = pygame.mask.from_surface(self.image)
             else:
                 self.rect.x = -1000
                 self.rect.y = -1000
