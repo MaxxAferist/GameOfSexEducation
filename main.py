@@ -2,6 +2,7 @@ import pygame
 import sys
 import os
 from ctypes import *
+from PIL import Image
 
 
 pygame.init()
@@ -11,6 +12,9 @@ WIDTH = windll.user32.GetSystemMetrics(0)
 HEIGHT = windll.user32.GetSystemMetrics(1)
 SOUNDS = [pygame.mixer.Sound('data//sounds//Steps.mp3')]
 
+
+#def pilToSurface(pilImage):
+    #return pygame.image.fromstring(pilImage.tobytes(), pass)
 
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
@@ -197,6 +201,7 @@ class Player(pygame.sprite.Sprite):
     def check_colide_move(self, walls, type_move):
         stack_sprite = pygame.sprite.Sprite()
         stack_sprite.rect = self.rect.copy()
+        stack_sprite.mask = self.mask.copy()
         if type_move == 'right':
             stack_sprite.rect.x += self.v
         if type_move == 'left':
@@ -206,7 +211,7 @@ class Player(pygame.sprite.Sprite):
         if type_move == 'up':
             stack_sprite.rect.y -= self.v
         for wall in walls:
-            if pygame.sprite.collide_rect(stack_sprite, wall):
+            if pygame.sprite.collide_mask(stack_sprite, wall):
                 return False
         return True
 
@@ -218,8 +223,8 @@ class Player(pygame.sprite.Sprite):
             if pygame.mouse.get_pressed()[0]:
                 self.ray.update(True)
                 for wall in walls:
-                    if pygame.sprite.collide_rect(self.ray, wall):
-                        print('You lox')
+                    if pygame.sprite.collide_mask(self.ray, wall):
+                        self.phrases[0].show = True
             else:
                 self.ray.update(False)
             if any([keys[pygame.K_d], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_w]]):
@@ -357,14 +362,15 @@ class Ray(pygame.sprite.Sprite):
                 w = x - player_pos[0]
                 h = y - player_pos[1]
                 self.image = pygame.Surface((abs(w), abs(h)), pygame.SRCALPHA)
+                self.rect = self.image.get_rect()
                 if w >= 0 and h >= 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 120), (0, 0), (abs(w), abs(h)), 20)
+                    pygame.draw.line(self.image, (0, 0, 255, 130), (0, 0), (abs(w), abs(h)), 20)
                 elif w < 0 and h < 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 120), (abs(w), abs(h)), (0, 0), 20)
+                    pygame.draw.line(self.image, (0, 0, 255, 130), (abs(w), abs(h)), (0, 0), 20)
                 elif w >= 0 and h < 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 120), (0, abs(h)), (abs(w), 0), 20)
+                    pygame.draw.line(self.image, (0, 0, 255, 130), (0, abs(h)), (abs(w), 0), 20)
                 else:
-                    pygame.draw.line(self.image, (0, 0, 255, 120), (abs(w), 0), (0, abs(h)), 20)
+                    pygame.draw.line(self.image, (0, 0, 255, 130), (abs(w), 0), (0, abs(h)), 20)
                 if w < 0:
                     self.rect.x = x
                 else:
