@@ -3,6 +3,7 @@ import sys
 import os
 from ctypes import *
 from PIL import Image, ImageEnhance
+import math
 
 
 pygame.init()
@@ -80,6 +81,7 @@ class Menu():
     def run(self):
         pygame.mixer.music.load('data//music//O.G.Troiboy.mp3')
         pygame.mixer.music.play()
+        pygame.mixer.music.set_volume(0)
         while self.running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -153,7 +155,8 @@ class Game():
         self.fon.rect = image.get_rect()
         pygame.mixer.music.stop()
         pygame.mixer.music.load('data//music//game_music.mp3')
-        pygame.mixer.music.set_volume(0.04)
+        #pygame.mixer.music.set_volume(0.04)
+        pygame.mixer.music.set_volume(0)
         pygame.mixer.music.play()
         self.running = True
 
@@ -185,24 +188,25 @@ class Game():
 
     def add_sprites(self):
         self.nps_types = [Knight]
-        rock = Wall((100, 200), 'rock')
+        rock = Wall((100, 200), 'rock', 10)
         self.all_sprites.add(rock)
         self.player = Player((1000, 400))
-        self.all_sprites.add(self.player)
-        for phrase in self.player.phrases:
-            phrase.add_groups()
         self.knight = Knight((500, 300), self.fon, self.player, self)
         self.all_sprites.add(self.knight)
         self.nps_sprites.add(self.knight)
         for phrase in self.knight.phrases:
             phrase.add_groups()
+        self.all_sprites.add(self.player)
+        for phrase in self.player.phrases:
+            phrase.add_groups()
         self.player.ray.add_groups()
         self.walls_sprites.add(rock)
 
 class Wall(pygame.sprite.Sprite):
-    def __init__(self, pos, type):
+    def __init__(self, pos, type, k):
         super().__init__()
-        self.image = pygame.transform.scale(load_image(f'objects//{type}.png'), (300, 300))
+        image = load_image(f'objects//{type}.png')
+        self.image = pygame.transform.scale(image, (image.get_width() * k, image.get_height() * k))
         self.base_image = self.image.copy()
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
@@ -220,10 +224,10 @@ class Wall(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos):
         super().__init__()
-        self.image_1 = pygame.transform.scale(load_image('creature//player.png'), (100, 100))
-        self.image_2 = pygame.transform.scale(load_image('creature//player_run_1.png'), (100, 100))
+        self.image_1 = pygame.transform.scale(load_image('creature//player.png'), (80, 140))
+        self.image_2 = pygame.transform.scale(load_image('creature//player_run_1.png'), (80, 140))
         self.image_2_flip = pygame.transform.flip(self.image_2, True, False)
-        self.image_3 = pygame.transform.scale(load_image('creature//player_run_2.png'), (100, 100))
+        self.image_3 = pygame.transform.scale(load_image('creature//player_run_2.png'), (80, 140))
         self.image_3_flip = pygame.transform.flip(self.image_3, True, False)
         self.image = self.image_1
         self.rect = self.image.get_rect()
@@ -305,8 +309,8 @@ class Player(pygame.sprite.Sprite):
                     self.image = self.image_1
                     self.phrases[0].show = True
 
-                if SOUNDS[0].get_num_channels() == 0:
-                    SOUNDS[0].play()
+                # if SOUNDS[0].get_num_channels() == 0:
+                #     SOUNDS[0].play()
             else:
                 self.image = self.image_1
 
@@ -327,10 +331,10 @@ class Player(pygame.sprite.Sprite):
 class Knight(pygame.sprite.Sprite):
     def __init__(self, pos, fon, player, table):
         super().__init__()
-        self.image_1 = pygame.transform.scale(load_image('creature//knight.png'), (100, 100))
-        self.image_2 = pygame.transform.scale(load_image('creature//knight_run_1.png'), (100, 100))
+        self.image_1 = pygame.transform.scale(load_image('creature//knight.png'), (110, 140))
+        self.image_2 = pygame.transform.scale(load_image('creature//knight_run_1.png'), (110, 140))
         self.image_2_flip = pygame.transform.flip(self.image_2, True, False)
-        self.image_3 = pygame.transform.scale(load_image('creature//knight_run_2.png'), (100, 100))
+        self.image_3 = pygame.transform.scale(load_image('creature//knight_run_2.png'), (110, 140))
         self.image_3_flip = pygame.transform.flip(self.image_3, True, False)
         self.image = self.image_1
         self.rect = self.image.get_rect()
@@ -427,7 +431,7 @@ class dialogWindow():
         self.fon.image = image
         self.fon.rect = self.fon.image.get_rect()
         self.dialog_window = pygame.sprite.Sprite(self.all_sprites)
-        self.dialog_window.image = load_image('dialog_window_alpha.png')
+        self.dialog_window.image = load_image('dialog.png')
         self.dialog_window.rect = self.dialog_window.image.get_rect()
         self.dialog_window.rect.x = (WIDTH - self.dialog_window.rect.w) // 2
         self.dialog_window.rect.y = HEIGHT - self.dialog_window.rect.h
@@ -539,6 +543,8 @@ class Ray(pygame.sprite.Sprite):
         self.player = player
         self.image = pygame.Surface((0, 0))
         self.mask = pygame.mask.from_surface(self.image)
+        image = load_image('ray.png')
+        self.base_image = pygame.transform.scale(image, (self.distance * 2, image.get_height()))
 
     def update(self, *args):
         if args:
@@ -546,31 +552,22 @@ class Ray(pygame.sprite.Sprite):
             if pressed:
                 player_pos = (self.player.rect.centerx, self.player.rect.centery)
                 pos = pygame.mouse.get_pos()
-                d1 = ((pos[0] - player_pos[0]) ** 2 + (pos[1] - player_pos[1]) ** 2) ** 0.5
-                k = d1 / self.distance
-                x = (pos[0] - player_pos[0]) / k + player_pos[0]
-                y = (pos[1] - player_pos[1]) / k + player_pos[1]
-                w = x - player_pos[0]
-                h = y - player_pos[1]
-                self.image = pygame.Surface((abs(w), abs(h)), pygame.SRCALPHA)
-                self.rect = self.image.get_rect()
-                if w >= 0 and h >= 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 130), (0, 0), (abs(w), abs(h)), 20)
-                elif w < 0 and h < 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 130), (abs(w), abs(h)), (0, 0), 20)
-                elif w >= 0 and h < 0:
-                    pygame.draw.line(self.image, (0, 0, 255, 130), (0, abs(h)), (abs(w), 0), 20)
-                else:
-                    pygame.draw.line(self.image, (0, 0, 255, 130), (abs(w), 0), (0, abs(h)), 20)
-                if w < 0:
-                    self.rect.x = x
-                else:
-                    self.rect.x = player_pos[0]
-                if h < 0:
-                    self.rect.y = y
-                else:
-                    self.rect.y = player_pos[1]
-                self.mask = pygame.mask.from_surface(self.image)
+                if pos[0] != player_pos[0]:
+                    k1 = (pos[1] - player_pos[1]) / (pos[0] - player_pos[0])
+                    k2 = 0
+                    if pos[0] > player_pos[0] and pos[1] < player_pos[1]:
+                        angle = math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                    elif pos[0] < player_pos[0] and pos[1] < player_pos[1]:
+                        angle = 180 - abs(math.degrees(math.atan((k2 - k1) / (1 + k1 * k2))))
+                    elif pos[0] < player_pos[0] and pos[1] > player_pos[1]:
+                        angle = 180 + math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                    else:
+                        angle = math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                    self.image = pygame.transform.rotate(self.base_image, angle)
+                    self.rect = self.image.get_rect()
+                    self.rect.centerx = self.player.rect.centerx
+                    self.rect.centery = self.player.rect.centery
+                    self.mask = pygame.mask.from_surface(self.image)
             else:
                 self.rect.x = -1000
                 self.rect.y = -1000
