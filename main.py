@@ -2,7 +2,7 @@ import pygame
 import sys
 import os
 from ctypes import *
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 
 pygame.init()
@@ -13,8 +13,21 @@ HEIGHT = windll.user32.GetSystemMetrics(1)
 SOUNDS = [pygame.mixer.Sound('data//sounds//Steps.mp3')]
 
 
-#def pilToSurface(pilImage):
-    #return pygame.image.fromstring(pilImage.tobytes(), pass)
+def pilToSurface(pilImage):
+    return pygame.image.frombuffer(pilImage.tobytes(), pilImage.size, pilImage.mode)
+
+
+def surfaceToPil(surface):
+    pil_string_image = pygame.image.tostring(surface, "RGBA", False)
+    return Image.frombuffer("RGBA", surface.get_size(), pil_string_image)
+
+
+def lowBrightness(image, factor):
+    pil_image = surfaceToPil(image)
+    enhancer = ImageEnhance.Brightness(pil_image)
+    image_final = enhancer.enhance(factor)
+    return pilToSurface(image_final)
+
 
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
@@ -133,6 +146,7 @@ class Game():
         self.clock = pygame.time.Clock()
         self.all_sprites = pygame.sprite.Group()
         self.walls_sprites = pygame.sprite.Group()
+        self.nps_sprites = pygame.sprite.Group()
         self.fon = pygame.sprite.Sprite(self.all_sprites)
         image = load_image('game_fon.png')
         self.fon.image = image
@@ -144,39 +158,63 @@ class Game():
         self.running = True
 
     def run(self):
-        rock = Wall((100, 200), 'rock')
-        self.all_sprites.add(rock)
-        self.player = Player((1000, 400))
-        self.all_sprites.add(self.player)
-        for phrase in self.player.phrases:
-            phrase.add_groups()
-        self.player.ray.add_groups()
-        self.walls_sprites.add(rock)
+        self.add_sprites()
         camera = Camera()
         while self.running:
+            self.reset_images()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     go_menu()
             camera.update(self.player, self.fon)
             for sprite in self.all_sprites:
                 camera.apply(sprite)
-
+            for sprite in self.nps_sprites:
+                if type(sprite) in self.nps_types:
+                    camera.apply_for_nps(sprite)
             self.player.update(self.walls_sprites)
+            self.knight.update(self.walls_sprites)
             self.all_sprites.update()
             self.all_sprites.draw(self.screen)
             pygame.display.flip()
             self.screen.fill(pygame.Color(0, 0, 0))
             self.clock.tick(FPS)
 
+    def reset_images(self):
+        for wall in self.walls_sprites:
+            wall.norm_Brighntess()
+
+    def add_sprites(self):
+        self.nps_types = [Knight]
+        rock = Wall((100, 200), 'rock')
+        self.all_sprites.add(rock)
+        self.player = Player((1000, 400))
+        self.all_sprites.add(self.player)
+        for phrase in self.player.phrases:
+            phrase.add_groups()
+        self.knight = Knight((500, 300), self.fon, self.player, self)
+        self.all_sprites.add(self.knight)
+        self.nps_sprites.add(self.knight)
+        for phrase in self.knight.phrases:
+            phrase.add_groups()
+        self.player.ray.add_groups()
+        self.walls_sprites.add(rock)
 
 class Wall(pygame.sprite.Sprite):
     def __init__(self, pos, type):
         super().__init__()
         self.image = pygame.transform.scale(load_image(f'objects//{type}.png'), (300, 300))
+        self.base_image = self.image.copy()
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
         self.mask = pygame.mask.from_surface(self.image)
+
+    def low_Brightness(self):
+        self.image = self.base_image.copy()
+        self.image = lowBrightness(self.image, 0.5)
+
+    def norm_Brighntess(self):
+        self.image = self.base_image.copy()
 
 
 class Player(pygame.sprite.Sprite):
@@ -224,7 +262,7 @@ class Player(pygame.sprite.Sprite):
                 self.ray.update(True)
                 for wall in walls:
                     if pygame.sprite.collide_mask(self.ray, wall):
-                        self.phrases[0].show = True
+                        wall.low_Brightness()
             else:
                 self.ray.update(False)
             if any([keys[pygame.K_d], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_w]]):
@@ -286,6 +324,155 @@ class Player(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
 
+class Knight(pygame.sprite.Sprite):
+    def __init__(self, pos, fon, player, table):
+        super().__init__()
+        self.image_1 = pygame.transform.scale(load_image('creature//knight.png'), (100, 100))
+        self.image_2 = pygame.transform.scale(load_image('creature//knight_run_1.png'), (100, 100))
+        self.image_2_flip = pygame.transform.flip(self.image_2, True, False)
+        self.image_3 = pygame.transform.scale(load_image('creature//knight_run_2.png'), (100, 100))
+        self.image_3_flip = pygame.transform.flip(self.image_3, True, False)
+        self.image = self.image_1
+        self.rect = self.image.get_rect()
+        self.fon = fon
+        self.rect.x = self.fon.rect.x + pos[0]
+        self.rect.y = self.fon.rect.y + pos[1]
+        self.v = 1
+        self.n_animation = 0
+        self.n_animation_limit = 10
+        self.phrases = [Messege('ЬЛЯТЬ ОТВАЛИ', self, 30)]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.k_pos = [self.rect.x, self.rect.y]
+        self.player = player
+        self.table = table
+
+    def check_colide_move(self, walls, type_move):
+        stack_sprite = pygame.sprite.Sprite()
+        stack_sprite.rect = self.rect.copy()
+        stack_sprite.mask = self.mask.copy()
+        if type_move == 'right':
+            stack_sprite.rect.x += self.v
+        if type_move == 'left':
+            stack_sprite.rect.x -= self.v
+        if type_move == 'down':
+            stack_sprite.rect.y += self.v
+        if type_move == 'up':
+            stack_sprite.rect.y -= self.v
+        for wall in walls:
+            if pygame.sprite.collide_mask(stack_sprite, wall):
+                return False
+        return True
+
+    def range_from_player(self, r):
+        if ((self.rect.centerx - self.player.rect.centerx) ** 2 + (self.rect.centery - self.player.rect.centery) ** 2) ** 0.5 <= r:
+            return True
+        return False
+
+    def update(self, *args):
+        if args:
+            walls = args[0]
+            self.phrases[0].show = False
+            if self.k_pos != [self.rect.x, self.rect.y]:
+                self.go_walk(self.k_pos)
+                self.change_image()
+            else:
+                self.image = self.image_1
+            if self.range_from_player(150):
+                key = pygame.key.get_pressed()[pygame.K_e]
+                if key:
+                    dialog = dialogWindow('Ты еблан?')
+                    dialog.run(self.table)
+
+    def go_walk(self, pos):
+        self.k = (pos[1] - self.rect.y) / (pos[0] - self.rect.x)
+        self.b = self.rect.y - (self.k * self.rect.x)
+        if pos[0] > self.rect.x:
+            self.rect.x += self.v
+        else:
+            self.rect.x -= self.v
+        self.rect.y = self.k * self.rect.x + self.b
+
+    def go_coords(self, pos, fon=True):
+        if fon:
+            self.k_pos = [self.fon.rect.x + pos[0], self.fon.rect.y + pos[1]]
+        else:
+            self.k_pos = pos
+
+    def change_image(self):
+        if self.n_animation == self.n_animation_limit:
+            if self.image == self.image_1:
+                self.image = self.image_2
+            elif self.image == self.image_2:
+                self.image = self.image_3
+            elif self.image == self.image_3:
+                self.image = self.image_2
+            self.n_animation = 0
+        else:
+            self.n_animation += 1
+        self.mask = pygame.mask.from_surface(self.image)
+
+
+class dialogWindow():
+    def __init__(self, text):
+        self.phrase = text
+        self.answers = []
+        self.all_sprites = pygame.sprite.Group()
+
+    def add_answer(self, answer):
+        self.answers.append(answer)
+
+    def add_sprites(self, other):
+        self.fon = pygame.sprite.Sprite(self.all_sprites)
+        image = lowBrightness(other.screen.subsurface(pygame.Rect(0, 0, WIDTH, HEIGHT)), 0.5)
+        self.fon.image = image
+        self.fon.rect = self.fon.image.get_rect()
+        self.dialog_window = pygame.sprite.Sprite(self.all_sprites)
+        self.dialog_window.image = load_image('dialog_window_alpha.png')
+        self.dialog_window.rect = self.dialog_window.image.get_rect()
+        self.dialog_window.rect.x = (WIDTH - self.dialog_window.rect.w) // 2
+        self.dialog_window.rect.y = HEIGHT - self.dialog_window.rect.h
+
+    def run(self, other):
+        other.all_sprites.draw(other.screen)
+        pygame.display.flip()
+        self.add_sprites(other)
+        self.running = True
+        while self.running:
+            other.screen.fill(pygame.Color(0, 0, 0))
+            for event in pygame.event.get():
+                pass
+            self.all_sprites.update()
+            self.all_sprites.draw(other.screen)
+            pygame.display.flip()
+            other.clock.tick(FPS)
+
+
+class Answer(pygame.sprite.Sprite):
+    def __init__(self, text, pos, width, height, action):
+        super().__init__()
+        self.w = width
+        self.h = height
+        self.answer = text
+        self.change_select()
+        self.select = False
+        self.action = action
+
+    def change_select(self):
+        if self.select:
+            self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            self.font = pygame.font.Font(None, 40)
+            self.text = self.font.render(self.answer, True, (247, 242, 26))
+            self.image.blit(self.text, (0, 0))
+        else:
+            self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            self.font = pygame.font.Font(None, 40)
+            self.text = self.font.render(self.answer, True, (0, 110, 189))
+            self.image.blit(self.text, (0, 0))
+
+    def click(self):
+        self.action()
+
+
 class Camera():
     def __init__(self):
         self.dx = 0
@@ -294,6 +481,10 @@ class Camera():
     def apply(self, other):
         other.rect.x += self.dx
         other.rect.y += self.dy
+
+    def apply_for_nps(self, nps):
+        nps.k_pos[0] += self.dx
+        nps.k_pos[1] += self.dy
 
     def update(self, target, fon):
         self.dx = (WIDTH - target.rect.w) // 2 - target.rect.x
