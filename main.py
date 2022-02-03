@@ -4,6 +4,7 @@ import os
 from ctypes import *
 from PIL import Image, ImageEnhance
 import math
+import numpy as np
 
 
 pygame.init()
@@ -243,7 +244,7 @@ class Player(pygame.sprite.Sprite):
     def check_colide_move(self, walls, type_move):
         stack_sprite = pygame.sprite.Sprite()
         stack_sprite.rect = self.rect.copy()
-        stack_sprite.mask = self.mask.copy()
+        stack_sprite.mask = pygame.mask.from_surface(pygame.Surface((self.rect.w, self.rect.h)))
         if type_move == 'right':
             stack_sprite.rect.x += self.v
         if type_move == 'left':
@@ -548,29 +549,29 @@ class Ray(pygame.sprite.Sprite):
 
     def update(self, *args):
         if args:
-            pressed = args[0]
-            if pressed:
+            if args[0]:
                 player_pos = (self.player.rect.centerx, self.player.rect.centery)
                 pos = pygame.mouse.get_pos()
-                if pos[0] != player_pos[0]:
+                try:
                     k1 = (pos[1] - player_pos[1]) / (pos[0] - player_pos[0])
-                    k2 = 0
                     if pos[0] > player_pos[0] and pos[1] < player_pos[1]:
-                        angle = math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                        angle = np.arctan(-k1) * 180 / np.pi
                     elif pos[0] < player_pos[0] and pos[1] < player_pos[1]:
-                        angle = 180 - abs(math.degrees(math.atan((k2 - k1) / (1 + k1 * k2))))
+                        angle = 180 - abs(np.arctan(-k1) * 180 / np.pi)
                     elif pos[0] < player_pos[0] and pos[1] > player_pos[1]:
-                        angle = 180 + math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                        angle = 180 + abs(np.arctan(-k1) * 180 / np.pi)
                     else:
-                        angle = math.degrees(math.atan((k2 - k1) / (1 + k1 * k2)))
+                        angle = np.arctan(-k1) * 180 / np.pi
                     self.image = pygame.transform.rotate(self.base_image, angle)
                     self.rect = self.image.get_rect()
                     self.rect.centerx = self.player.rect.centerx
                     self.rect.centery = self.player.rect.centery
                     self.mask = pygame.mask.from_surface(self.image)
+                except:
+                    pass
             else:
-                self.rect.x = -1000
-                self.rect.y = -1000
+                self.rect.x = -10000
+                self.rect.y = -10000
 
     def add_groups(self):
         for group in self.player.groups():
