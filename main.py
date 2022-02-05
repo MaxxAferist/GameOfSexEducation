@@ -238,7 +238,7 @@ class Player(pygame.sprite.Sprite):
         self.n_animation = 0
         self.n_animation_limit = 10
         self.phrases = [Messege('ДА БЛЯТЬ ЛОБ БОЛИТ', self, 30)]
-        self.ray = Ray(self, 500)
+        self.ray = Ray(self, 300, 10, [139, 0, 0])
         self.mask = pygame.mask.from_surface(self.image)
 
     def check_colide_move(self, walls, type_move):
@@ -445,7 +445,8 @@ class dialogWindow():
         while self.running:
             other.screen.fill(pygame.Color(0, 0, 0))
             for event in pygame.event.get():
-                pass
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.running = False
             self.all_sprites.update()
             self.all_sprites.draw(other.screen)
             pygame.display.flip()
@@ -537,15 +538,17 @@ class Messege(pygame.sprite.Sprite):
 
 
 class Ray(pygame.sprite.Sprite):
-    def __init__(self, player, distance):
+    def __init__(self, player, distance, tal, color):
         super().__init__()
         self.rect = pygame.Surface((0, 0)).get_rect()
         self.distance = distance
+        self.tal = tal
         self.player = player
         self.image = pygame.Surface((0, 0))
         self.mask = pygame.mask.from_surface(self.image)
-        image = load_image('ray.png')
-        self.base_image = pygame.transform.scale(image, (self.distance * 2, image.get_height()))
+        image = pygame.Surface((0, 0), pygame.SRCALPHA)
+        self.image = image
+        self.color = color + [170]
 
     def update(self, *args):
         if args:
@@ -553,16 +556,38 @@ class Ray(pygame.sprite.Sprite):
                 player_pos = (self.player.rect.centerx, self.player.rect.centery)
                 pos = pygame.mouse.get_pos()
                 try:
-                    k1 = (pos[1] - player_pos[1]) / (pos[0] - player_pos[0])
-                    if pos[0] > player_pos[0] and pos[1] < player_pos[1]:
-                        angle = np.arctan(-k1) * 180 / np.pi
-                    elif pos[0] < player_pos[0] and pos[1] < player_pos[1]:
-                        angle = 180 - abs(np.arctan(-k1) * 180 / np.pi)
-                    elif pos[0] < player_pos[0] and pos[1] > player_pos[1]:
-                        angle = 180 + abs(np.arctan(-k1) * 180 / np.pi)
+                    k = (pos[1] - player_pos[1]) / (pos[0] - player_pos[0])
+                    if pos[0] > player_pos[0] and pos[1] <= player_pos[1]:
+                        alpha = np.arctan(-k) * 180 / np.pi
+                    elif pos[0] <= player_pos[0] and pos[1] <= player_pos[1]:
+                        alpha = 180 + np.arctan(-k) * 180 / np.pi
+                    elif pos[0] <= player_pos[0] and pos[1] > player_pos[1]:
+                        alpha = 180 + np.arctan(-k) * 180 / np.pi
                     else:
-                        angle = np.arctan(-k1) * 180 / np.pi
-                    self.image = pygame.transform.rotate(self.base_image, angle)
+                        alpha = 360 + np.arctan(-k) * 180 / np.pi
+                    alpha = np.radians(alpha)
+
+                    x_p = np.cos(np.radians(90 - np.degrees(alpha))) * self.tal
+                    y_p = np.sin(np.radians(90 - np.degrees(alpha))) * self.tal
+
+                    X = np.cos(alpha) * self.distance
+                    Y = np.sin(alpha) * self.distance
+
+                    w = max(abs(-x_p + X), abs(x_p + X)) * 2
+                    h = max(abs(-y_p - Y), abs(y_p - Y)) * 2
+
+                    image = pygame.Surface((w, h), pygame.SRCALPHA)
+
+                    x = image.get_width() // 2
+                    y = image.get_height() // 2
+
+                    pygame.draw.polygon(image, self.color, ((x - x_p, y - y_p),
+                                                             (x - x_p + X, y - y_p - Y),
+                                                             (x + x_p + X, y + y_p - Y),
+                                                             (x + x_p, y + y_p)))
+                    pygame.draw.circle(image, self.color, (x, y), self.tal)
+                    self.image = image.copy()
+
                     self.rect = self.image.get_rect()
                     self.rect.centerx = self.player.rect.centerx
                     self.rect.centery = self.player.rect.centery
