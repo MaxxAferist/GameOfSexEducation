@@ -1,0 +1,3 @@
+cell = 65, 65
+item = 56, 56
+description_inventory = 330, 330

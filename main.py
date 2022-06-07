@@ -3,8 +3,13 @@ import sys
 import os
 from ctypes import *
 from PIL import Image, ImageEnhance
-import math
 import numpy as np
+import os
+from food_items import *
+from armor_items import *
+from weapon_items import *
+from other_items import *
+from images import *
 
 
 pygame.init()
@@ -13,32 +18,6 @@ FPS = 60
 WIDTH = windll.user32.GetSystemMetrics(0)
 HEIGHT = windll.user32.GetSystemMetrics(1)
 SOUNDS = [pygame.mixer.Sound('data//sounds//Steps.mp3')]
-
-
-def pilToSurface(pilImage):
-    return pygame.image.frombuffer(pilImage.tobytes(), pilImage.size, pilImage.mode)
-
-
-def surfaceToPil(surface):
-    pil_string_image = pygame.image.tostring(surface, "RGBA", False)
-    return Image.frombuffer("RGBA", surface.get_size(), pil_string_image)
-
-
-def lowBrightness(image, factor):
-    pil_image = surfaceToPil(image)
-    enhancer = ImageEnhance.Brightness(pil_image)
-    image_final = enhancer.enhance(factor)
-    return pilToSurface(image_final)
-
-
-def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
-    # если файл не существует, то выходим
-    if not os.path.isfile(fullname):
-        print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    image = pygame.image.load(fullname)
-    return image
 
 
 def termit():
@@ -84,6 +63,7 @@ class Menu():
         pygame.mixer.music.play()
         pygame.mixer.music.set_volume(0)
         while self.running:
+            self.screen.fill((0, 0, 0))
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     termit()
@@ -169,6 +149,9 @@ class Game():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     go_menu()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_TAB:
+                        self.inventory.run(self)
             camera.update(self.player, self.fon)
             for sprite in self.all_sprites:
                 camera.apply(sprite)
@@ -202,6 +185,8 @@ class Game():
             phrase.add_groups()
         self.player.ray.add_groups()
         self.walls_sprites.add(rock)
+        self.inventory = Inventory(self.player.inventory)
+
 
 class Wall(pygame.sprite.Sprite):
     def __init__(self, pos, type, k):
@@ -216,7 +201,7 @@ class Wall(pygame.sprite.Sprite):
 
     def low_Brightness(self):
         self.image = self.base_image.copy()
-        self.image = lowBrightness(self.image, 0.5)
+        self.image = lowBrightness(self.image, 0.5, "RGBA")
 
     def norm_Brighntess(self):
         self.image = self.base_image.copy()
@@ -240,6 +225,9 @@ class Player(pygame.sprite.Sprite):
         self.phrases = [Messege('ДА БЛЯТЬ ЛОБ БОЛИТ', self, 30)]
         self.ray = Ray(self, 300, 10, [139, 0, 0])
         self.mask = pygame.mask.from_surface(self.image)
+        self.inventory = [[0] * 6] + [[0] * 6] * 4 + [[0] * 4] + [[0] * 3]
+        self.inventory[0][0] = Spider_bib(self)
+        self.inventory[5][0] = Meat(self)
 
     def check_colide_move(self, walls, type_move):
         stack_sprite = pygame.sprite.Sprite()
@@ -420,15 +408,23 @@ class Knight(pygame.sprite.Sprite):
 class dialogWindow():
     def __init__(self, text):
         self.phrase = text
-        self.answers = []
+        self.answers = [['Что нахуй происходит?', self.stop],
+                        ['Блять ты кто', self.stop],
+                        ['Ахуеть', self.stop],
+                        ['Ну сколько можно...', self.stop],
+                        ['Засунь се в жопу огурец', self.stop]]
+        self.index_select = 0
         self.all_sprites = pygame.sprite.Group()
 
     def add_answer(self, answer):
         self.answers.append(answer)
 
+    def stop(self):
+        self.running = False
+
     def add_sprites(self, other):
         self.fon = pygame.sprite.Sprite(self.all_sprites)
-        image = lowBrightness(other.screen.subsurface(pygame.Rect(0, 0, WIDTH, HEIGHT)), 0.5)
+        image = lowBrightness(other.screen.subsurface(pygame.Rect(0, 0, WIDTH, HEIGHT)), 0.5, "RGB")
         self.fon.image = image
         self.fon.rect = self.fon.image.get_rect()
         self.dialog_window = pygame.sprite.Sprite(self.all_sprites)
@@ -436,6 +432,16 @@ class dialogWindow():
         self.dialog_window.rect = self.dialog_window.image.get_rect()
         self.dialog_window.rect.x = (WIDTH - self.dialog_window.rect.w) // 2
         self.dialog_window.rect.y = HEIGHT - self.dialog_window.rect.h
+
+        self.answers_sprites = pygame.sprite.Group()
+        for i in range(len(self.answers)):
+            answer = Answer(self.answers[i][0], self.answers[i][1],
+                            (self.dialog_window.rect.x + 10, self.dialog_window.rect.y + 50 + i * 27),
+                            (self.dialog_window.rect.w, 40))
+            self.answers_sprites.add(answer)
+        self.answers_sprites.sprites()[self.index_select].select = True
+        self.answers_sprites.sprites()[self.index_select].change_select()
+        self.all_sprites.add(self.answers_sprites)
 
     def run(self, other):
         other.all_sprites.draw(other.screen)
@@ -447,6 +453,23 @@ class dialogWindow():
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     self.running = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        self.answers_sprites.sprites()[self.index_select].select = False
+                        self.answers_sprites.sprites()[self.index_select].change_select()
+                        if self.index_select == 0:
+                            self.index_select = len(self.answers_sprites)
+                        self.index_select -= 1
+                    if event.key == pygame.K_DOWN:
+                        self.answers_sprites.sprites()[self.index_select].select = False
+                        self.answers_sprites.sprites()[self.index_select].change_select()
+                        if self.index_select == len(self.answers_sprites) - 1:
+                            self.index_select = -1
+                        self.index_select += 1
+                    self.answers_sprites.sprites()[self.index_select].select = True
+                    self.answers_sprites.sprites()[self.index_select].change_select()
+                    if event.key == pygame.K_RETURN:
+                        self.answers_sprites.sprites()[self.index_select].action()
             self.all_sprites.update()
             self.all_sprites.draw(other.screen)
             pygame.display.flip()
@@ -454,29 +477,26 @@ class dialogWindow():
 
 
 class Answer(pygame.sprite.Sprite):
-    def __init__(self, text, pos, width, height, action):
+    def __init__(self, text, action, pos, size):
         super().__init__()
-        self.w = width
-        self.h = height
+        self.w, self.h = size
         self.answer = text
-        self.change_select()
         self.select = False
+        self.font = pygame.font.Font(os.path.join(os.getcwd(), 'data', '18965.ttf'), 15)
+        self.change_select()
+        self.rect = self.image.get_rect()
+        self.rect.x, self.rect.y = pos
         self.action = action
 
     def change_select(self):
         if self.select:
             self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-            self.font = pygame.font.Font(None, 40)
             self.text = self.font.render(self.answer, True, (247, 242, 26))
             self.image.blit(self.text, (0, 0))
         else:
             self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-            self.font = pygame.font.Font(None, 40)
             self.text = self.font.render(self.answer, True, (0, 110, 189))
             self.image.blit(self.text, (0, 0))
-
-    def click(self):
-        self.action()
 
 
 class Camera():
@@ -601,6 +621,147 @@ class Ray(pygame.sprite.Sprite):
     def add_groups(self):
         for group in self.player.groups():
             group.add(self)
+
+
+class Inventory():
+    def __init__(self, invent):
+        self.all_sprites = pygame.sprite.Group()
+        self.statik_sprite = pygame.sprite.Group()
+        self.font = pygame.font.Font(os.path.join(os.getcwd(), 'data', '19718.ttf'), 15)
+        self.cell_size = [65, 65]
+        self.invent = invent
+        self.items = [[0] * 6] + [[0] * 6] * 4 + [[0] * 4] + [[0] * 3]
+
+    def add_sprites(self, other):
+        self.fon = pygame.sprite.Sprite(self.statik_sprite)
+        image = lowBrightness(other.screen, 0.5, "RGB")
+        self.fon.image = image
+        self.fon.rect = self.fon.image.get_rect()
+        self.inventory_window = pygame.sprite.Sprite(self.statik_sprite)
+        self.inventory_window.image = load_image('fon_inventary6.png')
+        self.inventory_window.rect = self.inventory_window.image.get_rect()
+        self.inventory_window.rect.x = (WIDTH - self.inventory_window.rect.w) // 2
+        self.inventory_window.rect.y = (HEIGHT - self.inventory_window.rect.h) // 2
+
+        promezh = 4
+        self.cells = []
+        left_top = self.inventory_window.rect.x + 340
+        up_top = self.inventory_window.rect.y + 361
+        cells_sprites = pygame.sprite.Group()
+        for i in range(6):
+            cell = Inventory_cell('all')
+            cell.rect.x = left_top + i * (cell.rect.w + promezh)
+            cell.rect.y = up_top
+            cells_sprites.add(cell)
+        self.cells.append(cells_sprites)
+
+        left_top = self.inventory_window.rect.x + 30
+        up_top = self.inventory_window.rect.y + 25
+        for i in range(4):
+            cells_sprites = pygame.sprite.Group()
+            for j in range(6):
+                cell = Inventory_cell('all')
+                cell.rect.x = left_top + i * (cell.rect.w + promezh)
+                cell.rect.y = up_top + j * (cell.rect.h + promezh)
+                cells_sprites.add(cell)
+            self.cells.append(cells_sprites)
+
+        self.description_border = pygame.sprite.Sprite()
+        self.description_base_image = pygame.transform.scale(load_image('description_of_items2.png'), (250, 250))
+        self.description_border.image = self.description_base_image.copy()
+        self.description_border.rect = self.description_border.image.get_rect()
+        self.description_border.rect.x = self.inventory_window.rect.x + 340
+        self.description_border.rect.y = up_top
+        self.statik_sprite.add(self.description_border)
+        self.change_description('Василий не дрочи')
+
+        left_top = self.inventory_window.rect.x + 650
+        armor_types = ['helmet', 'bib', 'pens', 'bots']
+        cells_sprites = pygame.sprite.Group()
+        for i in range(4):
+            cell = Inventory_cell(armor_types[i])
+            cell.rect.x = left_top
+            cell.rect.y = up_top + i * (cell.rect.h + promezh)
+            cells_sprites.add(cell)
+        self.cells.append(cells_sprites)
+
+        self.player_base_image = pygame.transform.scale(load_image('creature/player.png'), (160, 280))
+        self.hanger = pygame.sprite.Sprite()
+        self.hanger.image = self.player_base_image.copy()
+        self.hanger.rect = self.hanger.image.get_rect()
+        self.hanger.rect.x = self.inventory_window.rect.x + 775
+        self.hanger.rect.y = up_top
+        self.all_sprites.add(self.hanger)
+
+        cells_sprites = pygame.sprite.Group()
+        left_top = self.inventory_window.rect.w + self.inventory_window.rect.x - (self.cell_size[0] + 30)
+        for i in range(3):
+            if i <= 1:
+                cell = Inventory_cell('ring')
+            else:
+                cell = Inventory_cell('amulet')
+            cell.rect.x = left_top
+            cell.rect.y = up_top + i * (cell.rect.h + promezh)
+            cells_sprites.add(cell)
+        self.cells.append(cells_sprites)
+        for group in self.cells:
+            self.all_sprites.add(group)
+
+    def change_description(self, text):
+        text = self.font.render(text, True, (0, 33, 55))
+        image = self.description_base_image.copy()
+        image.blit(text, (20, 10))
+        self.description_border.image = image
+
+    def init_inventoty(self):
+        for i in range(len(self.invent)):
+            for j in range(len(self.invent[i])):
+                if self.invent[i][j] != 0:
+                    cell = self.cells[i].sprites()[j]
+                    image = self.invent[i][j].cell_image
+                    type = self.invent[i][j].type
+                    self.items[i][j] = Cell_item(cell, image, type)
+        for i in range(len(self.items)):
+            for elem in self.items[i]:
+                if elem != 0:
+                    self.all_sprites.add(elem)
+
+    def run(self, other):
+        other.all_sprites.draw(other.screen)
+        pygame.display.flip()
+        self.add_sprites(other)
+        self.init_inventoty()
+        self.running = True
+        while self.running:
+            other.screen.fill(pygame.Color(0, 0, 0))
+            self.select_item = None
+            self.extra_item = None
+            self.all_sprites.update(self)
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.running = False
+                # if 
+            self.statik_sprite.draw(other.screen)
+            self.all_sprites.draw(other.screen)
+            pygame.display.flip()
+            other.clock.tick(FPS)
+
+
+class Inventory_cell(pygame.sprite.Sprite):
+    image = lowBrightness(load_image('cell.png'), 1.5, "RGB")
+    def __init__(self, type):
+        super().__init__()
+        self.type = type
+        self.base_image = Inventory_cell.image
+        self.colid_image = lowBrightness(self.base_image.copy(), 1.8, "RGB")
+        self.image = self.base_image.copy()
+        self.rect = self.image.get_rect()
+
+    def update(self, *args):
+        if self.rect.collidepoint(pygame.mouse.get_pos()) and self.image != self.colid_image:
+            self.image = self.colid_image
+        elif not self.rect.collidepoint(pygame.mouse.get_pos()) and self.image != self.base_image:
+            self.image = self.base_image
 
 
 if __name__ == '__main__':
